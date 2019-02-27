@@ -1,4 +1,5 @@
-open GT       
+open GT
+open Syntax      
        
 (* The type for the stack machine instructions *)
 @type insn =
@@ -23,7 +24,25 @@ type config = int list * Syntax.Stmt.config
 
    Takes a configuration and a program, and returns a configuration as a result
  *)                         
-let eval _ = failwith "Not yet implemented"
+let eval_one (stack, cfg) instr = 
+    let (s, i, o) = cfg in
+	match instr with
+        | BINOP op -> (match stack with
+            | x::y::tail -> ((Expr.token_to_op op y x)::tail, cfg)
+            | _ -> failwith "binop failed")
+        | CONST z -> (z::stack, cfg)
+        | READ -> (match i with
+            | z::tail -> (z::stack, (s, tail, o))
+            | _ -> failwith "read failed")
+        | WRITE -> (match stack with
+            | z::tail -> (tail, (s, i, o@[z]))
+            | _ -> failwith "write failed")
+        | LD x -> ((s x)::stack, cfg)
+        | ST x -> (match stack with
+            | z::tail -> (tail, (Expr.update x z s, i, o))
+            | _ -> failwith "st failed")
+
+let eval cfg p = List.fold_left eval_one cfg p
 
 (* Top-level evaluation
 
@@ -40,5 +59,13 @@ let run i p = let (_, (_, _, o)) = eval ([], (Syntax.Expr.empty, i, [])) p in o
    Takes a program in the source language and returns an equivalent program for the
    stack machine
  *)
+let rec compile_expr e = match e with
+    | Expr.Const n -> [CONST n]
+    | Expr.Var v -> [LD v]
+    | Expr.Binop (op, l, r) -> (compile_expr l)@(compile_expr r)@[BINOP op]
 
-let compile _ = failwith "Not yet implemented"
+let rec compile stmt = match stmt with
+    | Stmt.Read x -> [READ; ST x]
+    | Stmt.Write e -> (compile_expr e)@[WRITE]
+    | Stmt.Assign (x, e) -> (compile_expr e)@[ST x]
+    | Stmt.Seq (l, r) -> (compile l)@(compile r)

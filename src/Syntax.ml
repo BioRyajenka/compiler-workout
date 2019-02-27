@@ -34,15 +34,31 @@ module Expr =
     *)
     let update x v s = fun y -> if x = y then v else s y
 
-    (* Expression evaluator
+    let bool_to_int b = if b then 1 else 0
+    let int_to_bool i = i <> 0
 
-          val eval : state -> t -> int
- 
-       Takes a state and an expression, and returns the value of the expression in 
-       the given state.
-    *)
-    let eval _ = failwith "Not implemented yet"
+    let token_to_op s = 
+        match s with
+        | "+"  -> (+)
+        | "-"  -> (-)
+        | "*"  -> ( * )
+        | "/"  -> (/)
+        | "%"  -> (mod)
+        | ">"  -> fun l r -> bool_to_int (l > r)
+        | "<"  -> fun l r -> bool_to_int (l < r)
+        | ">=" -> fun l r -> bool_to_int (l >= r)
+        | "<=" -> fun l r -> bool_to_int (l <= r)
+        | "==" -> fun l r -> bool_to_int (l == r)
+        | "!=" -> fun l r -> bool_to_int (l != r)
+        | "&&" -> fun l r -> bool_to_int ((int_to_bool l) && (int_to_bool r))
+        | "!!" -> fun l r -> bool_to_int ((int_to_bool l) || (int_to_bool r))
+        | _ -> failwith ("Unknown token" ^ s)
 
+    let rec eval s e =
+         match e with
+         | Const value -> value
+         | Var varname -> s varname
+         | Binop (token, l, r) -> (token_to_op token) (eval s l) (eval s r)
   end
                     
 (* Simple statements: syntax and sematics *)
@@ -65,8 +81,13 @@ module Stmt =
 
        Takes a configuration and a statement, and returns another configuration
     *)
-    let eval _ = failwith "Not implemented yet"
-                                                         
+    let rec eval (st, i, o) stmt = match stmt with 
+        | Read x -> (match i with
+            | z::tail -> (Expr.update x z st, tail, o)
+            | _ -> failwith "fail read")
+        | Write e -> (st, i, o@[Expr.eval st e])
+        | Assign (x, e) -> (Expr.update x (Expr.eval st e) st, i, o)
+        | Seq (l, r) -> eval (eval (st, i, o) l) r 
   end
 
 (* The top-level definitions *)
